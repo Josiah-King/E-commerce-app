@@ -6,6 +6,38 @@ import { auth } from '@/auth'
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL })
 const prisma = new PrismaClient({ adapter })
 
+export async function GET() {
+  try {
+    const session = await auth()
+
+    if (!session) {
+      return NextResponse.json(
+        { error: 'You must be logged in' },
+        { status: 401 }
+      )
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: {
+        nickname: true,
+        hostel: true,
+        roomNo: true,
+        email: true,
+      },
+    })
+
+    return NextResponse.json({ user })
+
+  } catch (error) {
+    console.error('Profile fetch error:', error)
+    return NextResponse.json(
+      { error: 'Failed to fetch profile' },
+      { status: 500 }
+    )
+  }
+}
+
 export async function POST(request) {
   try {
     // Check if the user is logged in

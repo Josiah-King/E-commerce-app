@@ -6,11 +6,11 @@ import { useRouter } from 'next/navigation'
 import OwnerNav from '../components/OwnerNav'
 
 const NEXT_STATUS = {
-  PENDING: { label: 'Confirm Payment', next: 'PAID' },
-  PAID: { label: 'Start Preparing', next: 'PREPARING' },
-  PREPARING: { label: 'Out for Delivery', next: 'OUT_FOR_DELIVERY' },
-  OUT_FOR_DELIVERY: { label: 'Mark Delivered', next: 'DELIVERED' },
-  DELIVERED: { label: 'Mark Completed', next: 'COMPLETED' },
+  PENDING: { label: '✅ Accept Order', next: 'PREPARING' },
+  PAID: { label: '✅ Accept Order', next: 'PREPARING' },
+  PREPARING: { label: '🛵 Out for Delivery', next: 'OUT_FOR_DELIVERY' },
+  OUT_FOR_DELIVERY: { label: '🎉 Delivered', next: 'COMPLETED' },
+  DELIVERED: { label: '🎉 Mark as Completed', next: 'COMPLETED' },
   COMPLETED: null,
   CANCELLED: null,
 }
@@ -47,11 +47,11 @@ const STATUS_COLORS = {
 }
 
 const STATUS_LABELS = {
-  PENDING: 'Pending',
-  PAID: 'Paid',
-  PREPARING: 'Preparing',
-  OUT_FOR_DELIVERY: 'Out for Delivery',
-  DELIVERED: 'Delivered',
+  PENDING: 'Order Placed',
+  PAID: 'Order Placed',
+  PREPARING: 'Received',
+  OUT_FOR_DELIVERY: 'On Delivery',
+  DELIVERED: 'Completed',
   COMPLETED: 'Completed',
   CANCELLED: 'Cancelled',
 }

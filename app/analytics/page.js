@@ -16,11 +16,11 @@ const STATUS_COLORS = {
 }
 
 const STATUS_LABELS = {
-  PENDING: 'Pending',
-  PAID: 'Paid',
-  PREPARING: 'Preparing',
-  OUT_FOR_DELIVERY: 'Out for Delivery',
-  DELIVERED: 'Delivered',
+  PENDING: 'Order Placed',
+  PAID: 'Order Placed',
+  PREPARING: 'Received',
+  OUT_FOR_DELIVERY: 'On Delivery',
+  DELIVERED: 'Completed',
   COMPLETED: 'Completed',
   CANCELLED: 'Cancelled',
 }
@@ -66,6 +66,38 @@ function getTimeLabel(date) {
   })
 }
 
+function getDayLabel(date) {
+  const orderDate = new Date(date)
+  const today = new Date()
+  const yesterday = new Date()
+  yesterday.setDate(yesterday.getDate() - 1)
+
+  const isSameDay = (a, b) =>
+    a.getDate() === b.getDate() &&
+    a.getMonth() === b.getMonth() &&
+    a.getFullYear() === b.getFullYear()
+
+  if (isSameDay(orderDate, today)) return 'Today'
+  if (isSameDay(orderDate, yesterday)) return 'Yesterday'
+
+  return orderDate.toLocaleDateString('en-KE', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  })
+}
+
+function groupOrdersByDay(orders) {
+  const groups = {}
+  orders.forEach((order) => {
+    const label = getDayLabel(order.createdAt)
+    if (!groups[label]) groups[label] = []
+    groups[label].push(order)
+  })
+  return groups
+}
+
 const DATE_FILTERS = [
   { key: 'TODAY', label: 'Today' },
   { key: 'WEEK', label: 'This week' },
@@ -101,7 +133,13 @@ export default function AnalyticsPage() {
   const [dateFilter, setDateFilter] = useState('TODAY')
   const [statusFilter, setStatusFilter] = useState('ALL')
   const [search, setSearch] = useState('')
-  const [searchBy, setSearchBy] = useState('nickname')
+  const [showDateFilter, setShowDateFilter] = useState(false)
+  const [dateFilterMode, setDateFilterMode] = useState('SINGLE')
+  const [filterSingleDate, setFilterSingleDate] = useState('')
+  const [filterStartDate, setFilterStartDate] = useState('')
+  const [filterEndDate, setFilterEndDate] = useState('')
+  const [activeDateFilter, setActiveDateFilter] = useState(null)
+  const [searchBy, setSearchBy] = useState('Item')
   const [showSearchDropdown, setShowSearchDropdown] = useState(false)
 
   // Redirect if not owner
@@ -236,11 +274,11 @@ export default function AnalyticsPage() {
 
   // Filter orders
   const filteredOrders = orders.filter((order) => {
-    // Date filter
-    if (dateFilter !== 'ALL') {
-      const orderDate = new Date(order.createdAt)
-      const now = new Date()
+    const orderDate = new Date(order.createdAt)
+    const now = new Date()
 
+    // Date filter tabs
+    if (dateFilter !== 'ALL') {
       if (dateFilter === 'TODAY') {
         const isToday =
           orderDate.getDate() === now.getDate() &&
@@ -262,6 +300,26 @@ export default function AnalyticsPage() {
       }
     }
 
+    // Date search filter
+    if (activeDateFilter) {
+      if (activeDateFilter.type === 'SINGLE') {
+        const selected = new Date(activeDateFilter.date)
+        const isSameDay =
+          orderDate.getDate() === selected.getDate() &&
+          orderDate.getMonth() === selected.getMonth() &&
+          orderDate.getFullYear() === selected.getFullYear()
+        if (!isSameDay) return false
+      }
+
+      if (activeDateFilter.type === 'RANGE') {
+        const start = new Date(activeDateFilter.start)
+        start.setHours(0, 0, 0, 0)
+        const end = new Date(activeDateFilter.end)
+        end.setHours(23, 59, 59, 999)
+        if (orderDate < start || orderDate > end) return false
+      }
+    }
+
     // Status filter
     if (statusFilter !== 'ALL') {
       if (statusFilter === 'ACTIVE') {
@@ -272,23 +330,22 @@ export default function AnalyticsPage() {
     }
 
     // Search filter
-    // Search filter
     if (search) {
-        if (searchBy === 'nickname') {
-            const nickname = order.user?.nickname || order.user?.email || ''
-            if (!nickname.toLowerCase().includes(search.toLowerCase())) {
-                return false
-            }
+      if (searchBy === 'nickname') {
+        const nickname = order.user?.nickname || order.user?.email || ''
+        if (!nickname.toLowerCase().includes(search.toLowerCase())) {
+          return false
         }
+      }
 
-        if (searchBy === 'item') {
-            const itemNames = order.items
-                .map((item) => item.product.name.toLowerCase())
-                .join(' ')
-            if (!itemNames.includes(search.toLowerCase())) {
-                return false
-            }
+      if (searchBy === 'item') {
+        const itemNames = order.items
+          .map((item) => item.product.name.toLowerCase())
+          .join(' ')
+        if (!itemNames.includes(search.toLowerCase())) {
+          return false
         }
+      }
     }
 
     return true
@@ -345,13 +402,139 @@ export default function AnalyticsPage() {
 
         {/* ── Order History ── */}
         <div className="bg-white rounded-2xl shadow-sm p-6">
-          <div className="flex items-center justify-between mb-5">
-            <div>
-              <h2 className="font-bold text-gray-800 text-lg">
-                Order history
-              </h2>
-            </div>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-bold text-gray-800 text-lg">
+              Order history
+            </h2>
+
+            {/* Filter by Date Button */}
+            <button
+              onClick={() => setShowDateFilter((prev) => !prev)}
+              className={`flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-xl border transition ${
+                activeDateFilter
+                  ? 'bg-orange-500 text-white border-orange-500'
+                  : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+              }`}
+            >
+              📅 Filter by Date
+              <span className="text-xs">
+                {showDateFilter ? '▴' : '▾'}
+              </span>
+            </button>
           </div>
+
+          {/* ── Collapsible Date Filter Bar ── */}
+          {showDateFilter && (
+            <div className="bg-gray-50 border border-gray-200 rounded-2xl p-4 mb-5 space-y-4">
+
+              {/* Mode Toggle */}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setDateFilterMode('SINGLE')}
+                  className={`flex-1 py-2 rounded-xl text-sm font-medium transition ${
+                    dateFilterMode === 'SINGLE'
+                      ? 'bg-orange-500 text-white'
+                      : 'bg-white text-gray-500 border border-gray-200 hover:bg-gray-50'
+                  }`}
+                >
+                  📅 Single Date
+                </button>
+                <button
+                  onClick={() => setDateFilterMode('RANGE')}
+                  className={`flex-1 py-2 rounded-xl text-sm font-medium transition ${
+                    dateFilterMode === 'RANGE'
+                      ? 'bg-orange-500 text-white'
+                      : 'bg-white text-gray-500 border border-gray-200 hover:bg-gray-50'
+                  }`}
+                >
+                  📅 Date Range
+                </button>
+              </div>
+
+              {/* Date Inputs */}
+              {dateFilterMode === 'SINGLE' ? (
+                <input
+                  type="date"
+                  value={filterSingleDate}
+                  onChange={(e) => setFilterSingleDate(e.target.value)}
+                  max={new Date().toISOString().split('T')[0]}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-orange-300"
+                />
+              ) : (
+                <div className="flex items-center gap-3">
+                  <input
+                    type="date"
+                    value={filterStartDate}
+                    onChange={(e) => setFilterStartDate(e.target.value)}
+                    max={new Date().toISOString().split('T')[0]}
+                    className="flex-1 border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-orange-300"
+                  />
+                  <span className="text-gray-400 font-medium">—</span>
+                  <input
+                    type="date"
+                    value={filterEndDate}
+                    onChange={(e) => setFilterEndDate(e.target.value)}
+                    max={new Date().toISOString().split('T')[0]}
+                    className="flex-1 border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-orange-300"
+                  />
+                </div>
+              )}
+
+              {/* Apply and Clear Buttons */}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    if (dateFilterMode === 'SINGLE' && filterSingleDate) {
+                      setActiveDateFilter({
+                        type: 'SINGLE',
+                        date: filterSingleDate,
+                      })
+                      setShowDateFilter(false)
+                    } else if (
+                      dateFilterMode === 'RANGE' &&
+                      filterStartDate &&
+                      filterEndDate
+                    ) {
+                      setActiveDateFilter({
+                        type: 'RANGE',
+                        start: filterStartDate,
+                        end: filterEndDate,
+                      })
+                      setShowDateFilter(false)
+                    }
+                  }}
+                  className="flex-1 bg-orange-500 hover:bg-orange-600 text-white font-semibold py-2.5 rounded-xl transition text-sm"
+                >
+                  Apply Filter
+                </button>
+
+                {activeDateFilter && (
+                  <button
+                    onClick={() => {
+                      setActiveDateFilter(null)
+                      setFilterSingleDate('')
+                      setFilterStartDate('')
+                      setFilterEndDate('')
+                      setShowDateFilter(false)
+                    }}
+                    className="px-4 py-2.5 rounded-xl border border-gray-200 text-gray-500 hover:bg-gray-50 text-sm transition"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+
+              {/* Active filter indicator */}
+              {activeDateFilter && (
+                <p className="text-xs text-orange-500 font-medium text-center">
+                  {activeDateFilter.type === 'SINGLE'
+                    ? `Showing orders for ${new Date(activeDateFilter.date).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' })}`
+                    : `Showing orders from ${new Date(activeDateFilter.start).toLocaleDateString('en-KE', { day: 'numeric', month: 'short' })} to ${new Date(activeDateFilter.end).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' })}`}
+                </p>
+              )}
+
+            </div>
+          )}
 
           {/* Filters Row */}
           <div className="flex flex-wrap gap-2 mb-5">
@@ -475,97 +658,117 @@ export default function AnalyticsPage() {
           )}
 
           {/* Table */}
-          {filteredOrders.length > 0 && (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-gray-100">
-                    <th className="text-left py-3 px-3 text-xs font-medium text-gray-400">
-                      Student
-                    </th>
-                    <th className="text-left py-3 px-3 text-xs font-medium text-gray-400">
-                      Items
-                    </th>
-                    <th className="text-left py-3 px-3 text-xs font-medium text-gray-400">
-                      Total
-                    </th>
-                    <th className="text-left py-3 px-3 text-xs font-medium text-gray-400">
-                      Delivery
-                    </th>
-                    <th className="text-left py-3 px-3 text-xs font-medium text-gray-400">
-                      Status
-                    </th>
-                    <th className="text-left py-3 px-3 text-xs font-medium text-gray-400">
-                      Time
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredOrders.map((order) => (
-                    <tr
-                      key={order.id}
-                      className="border-b border-gray-50 hover:bg-gray-50 transition"
-                    >
-                      {/* Student */}
-                      <td className="py-3 px-3">
-                        <p className="font-medium text-gray-800">
-                          @{order.user?.nickname || order.user?.email}
-                        </p>
-                      </td>
+          {/* Grouped Orders */}
+          {filteredOrders.length > 0 && (() => {
+            const grouped = groupOrdersByDay(filteredOrders)
+            const groupKeys = Object.keys(grouped)
 
-                      {/* Items */}
-                      <td className="py-3 px-3">
-                        <p className="text-gray-600 text-xs leading-relaxed">
-                          {order.items
-                            .map(
-                              (item) =>
-                                `${item.product.name} x${item.quantity}`
-                            )
-                            .join(', ')}
-                        </p>
-                      </td>
+            return (
+              <div className="space-y-1">
+                {groupKeys.map((dayLabel) => (
+                  <div key={dayLabel}>
 
-                      {/* Total */}
-                      <td className="py-3 px-3">
-                        <p className="font-semibold text-orange-500">
-                          Ksh {order.total}
-                        </p>
-                      </td>
+                    {/* Day Label */}
+                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3 mt-4">
+                      {dayLabel}
+                    </p>
 
-                      {/* Delivery */}
-                      <td className="py-3 px-3">
-                        <p className="text-gray-700 text-xs">
-                          {order.hostel}
-                        </p>
-                        <p className="text-gray-400 text-xs">
-                          Room {order.roomNo}
-                        </p>
-                      </td>
+                    {/* Orders Table for this day */}
+                    <div className="overflow-x-auto rounded-xl border border-gray-100">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-gray-100 bg-gray-50">
+                            <th className="text-left py-3 px-3 text-xs font-medium text-gray-400">
+                              Student
+                            </th>
+                            <th className="text-left py-3 px-3 text-xs font-medium text-gray-400">
+                              Items
+                            </th>
+                            <th className="text-left py-3 px-3 text-xs font-medium text-gray-400">
+                              Total
+                            </th>
+                            <th className="text-left py-3 px-3 text-xs font-medium text-gray-400">
+                              Delivery
+                            </th>
+                            <th className="text-left py-3 px-3 text-xs font-medium text-gray-400">
+                              Status
+                            </th>
+                            <th className="text-left py-3 px-3 text-xs font-medium text-gray-400">
+                              Time
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {grouped[dayLabel].map((order) => (
+                            <tr
+                              key={order.id}
+                              className="border-b border-gray-50 hover:bg-gray-50 transition last:border-0"
+                            >
+                              {/* Student */}
+                              <td className="py-3 px-3">
+                                <p className="font-medium text-gray-800">
+                                  @{order.user?.nickname || order.user?.email}
+                                </p>
+                              </td>
 
-                      {/* Status */}
-                      <td className="py-3 px-3">
-                        <span
-                          className={`text-xs font-medium px-2.5 py-1 rounded-full ${STATUS_COLORS[order.status]}`}
-                        >
-                          {STATUS_LABELS[order.status]}
-                        </span>
-                      </td>
+                              {/* Items */}
+                              <td className="py-3 px-3">
+                                <p className="text-gray-600 text-xs leading-relaxed">
+                                  {order.items
+                                    .map(
+                                      (item) =>
+                                        `${item.product.name} x${item.quantity}`
+                                    )
+                                    .join(', ')}
+                                </p>
+                              </td>
 
-                      {/* Time */}
-                      <td className="py-3 px-3">
-                        <p className="text-gray-700 text-xs font-medium">
-                            {getDateLabel(order.createdAt)}
-                        </p>
-                        <p className="text-gray-400 text-xs mt-0.5">
-                            {getTimeLabel(order.createdAt)}
-                        </p>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+                              {/* Total */}
+                              <td className="py-3 px-3">
+                                <p className="font-semibold text-orange-500">
+                                  Ksh {order.total}
+                                </p>
+                              </td>
+
+                              {/* Delivery */}
+                              <td className="py-3 px-3">
+                                <p className="text-gray-700 text-xs">
+                                  {order.hostel}
+                                </p>
+                                <p className="text-gray-400 text-xs">
+                                  Room {order.roomNo}
+                                </p>
+                              </td>
+
+                              {/* Status */}
+                              <td className="py-3 px-3">
+                                <span
+                                  className={`text-xs font-medium px-2.5 py-1 rounded-full ${STATUS_COLORS[order.status]}`}
+                                >
+                                  {STATUS_LABELS[order.status]}
+                                </span>
+                              </td>
+
+                              {/* Time */}
+                              <td className="py-3 px-3">
+                                <p className="text-gray-700 text-xs font-medium">
+                                  {getDateLabel(order.createdAt)}
+                                </p>
+                                <p className="text-gray-400 text-xs mt-0.5">
+                                  {getTimeLabel(order.createdAt)}
+                                </p>
+                              </td>
+
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )
+          })()}
         </div>
 
       </main>
