@@ -8,8 +8,8 @@ import OwnerNav from '../components/OwnerNav'
 const NEXT_STATUS = {
   PENDING: { label: '✅ Accept Order', next: 'PREPARING' },
   PAID: { label: '✅ Accept Order', next: 'PREPARING' },
-  PREPARING: { label: '🛵 Out for Delivery', next: 'OUT_FOR_DELIVERY' },
-  OUT_FOR_DELIVERY: { label: '🎉 Delivered', next: 'COMPLETED' },
+  PREPARING: { label: '🛵 Send Out for Delivery', next: 'OUT_FOR_DELIVERY' },
+  OUT_FOR_DELIVERY: { label: '🎉 Mark as Completed', next: 'COMPLETED' },
   DELIVERED: { label: '🎉 Mark as Completed', next: 'COMPLETED' },
   COMPLETED: null,
   CANCELLED: null,
@@ -71,7 +71,6 @@ const FILTERS = [
   { key: 'CANCELLED', label: 'Cancelled' },
 ]
 
-// Helper — how long ago was the order placed
 function timeAgo(date) {
   const seconds = Math.floor((new Date() - new Date(date)) / 1000)
   if (seconds < 60) return 'Just now'
@@ -79,10 +78,13 @@ function timeAgo(date) {
   if (minutes < 60) return `${minutes}m ago`
   const hours = Math.floor(minutes / 60)
   if (hours < 24) return `${hours}h ago`
-  return `${Math.floor(hours / 24)}d ago`
+  return new Date(date).toLocaleTimeString('en-KE', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  })
 }
 
-// Helper — check if order was placed today
 function isToday(date) {
   const today = new Date()
   const orderDate = new Date(date)
@@ -105,7 +107,6 @@ export default function DashboardPage() {
   const [newOrderAlert, setNewOrderAlert] = useState(false)
   const [prevOrderCount, setPrevOrderCount] = useState(0)
 
-  // Redirect if not owner
   useEffect(() => {
     if (status === 'unauthenticated') {
       router.push('/login')
@@ -116,23 +117,18 @@ export default function DashboardPage() {
     }
   }, [status, session, router])
 
-  // Fetch all orders
   async function fetchOrders(isAutoRefresh = false) {
     try {
       const response = await fetch('/api/orders')
       const data = await response.json()
-
       if (!response.ok) {
         setError('Failed to load orders')
         return
       }
-
-      // Check if new orders came in during auto refresh
       if (isAutoRefresh && data.orders.length > prevOrderCount) {
         setNewOrderAlert(true)
         setTimeout(() => setNewOrderAlert(false), 5000)
       }
-
       setPrevOrderCount(data.orders.length)
       setOrders(data.orders)
     } catch (error) {
@@ -148,34 +144,27 @@ export default function DashboardPage() {
     fetchOrders()
   }, [status, session])
 
-  // Auto refresh every 15 seconds
   useEffect(() => {
     if (status !== 'authenticated') return
     if (session?.user?.role !== 'OWNER') return
-
     const interval = setInterval(() => {
       fetchOrders(true)
     }, 15000)
-
     return () => clearInterval(interval)
   }, [status, session, prevOrderCount])
 
-  // Update order status
   async function updateStatus(orderId, newStatus) {
     setUpdatingId(orderId)
-
     try {
       const response = await fetch(`/api/orders/${orderId}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus }),
       })
-
       if (!response.ok) {
         alert('Failed to update status. Please try again.')
         return
       }
-
       setOrders((prevOrders) =>
         prevOrders.map((order) =>
           order.id === orderId ? { ...order, status: newStatus } : order
@@ -188,7 +177,6 @@ export default function DashboardPage() {
     }
   }
 
-  // ── Stats calculations ──
   const activeOrders = orders.filter((o) =>
     ACTIVE_STATUSES.includes(o.status)
   ).length
@@ -199,19 +187,14 @@ export default function DashboardPage() {
     .filter((o) => isToday(o.createdAt) && o.status !== 'CANCELLED')
     .reduce((sum, o) => sum + o.total, 0)
 
-  // ── Filter orders ──
   const filteredOrders = orders.filter((order) => {
-  // Only show today's orders
     const orderDate = new Date(order.createdAt)
     const today = new Date()
-    const isToday =
+    const isTodayOrder =
       orderDate.getDate() === today.getDate() &&
       orderDate.getMonth() === today.getMonth() &&
       orderDate.getFullYear() === today.getFullYear()
-
-    if (!isToday) return false
-
-    // Then apply status filter
+    if (!isTodayOrder) return false
     if (activeFilter === 'ALL') return true
     if (activeFilter === 'ACTIVE') return ACTIVE_STATUSES.includes(order.status)
     if (activeFilter === 'COMPLETED') return order.status === 'COMPLETED'
@@ -221,7 +204,7 @@ export default function DashboardPage() {
 
   if (status === 'loading' || loading) {
     return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+      <div className="min-h-screen bg-orange-50 flex items-center justify-center">
         <div className="text-center">
           <p className="text-4xl mb-3">🍟</p>
           <p className="text-orange-500 text-lg font-medium">
@@ -233,76 +216,53 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100">
-
-      {/* ── Header ── */}
+    <div className="min-h-screen bg-gray-50">
       <OwnerNav />
 
-      <main className="max-w-5xl mx-auto px-4 py-6 space-y-6">
-        <div className="flex justify-end">
-          <button
-            onClick={() => fetchOrders()}
-            className="flex items-center gap-1 text-sm bg-orange-50 text-orange-500 hover:bg-orange-100 font-medium px-3 py-2 rounded-lg transition"
-          >
-            ↻ Refresh Orders
-          </button>
-        </div>
+      <main className="max-w-2xl mx-auto px-4 py-5 space-y-4">
 
         {/* ── New Order Alert ── */}
         {newOrderAlert && (
-          <div className="bg-green-500 text-white px-5 py-3 rounded-xl shadow-lg flex items-center gap-3 animate-pulse">
+          <div className="bg-green-500 text-white px-4 py-3 rounded-2xl shadow flex items-center gap-3">
             <span className="text-xl">🔔</span>
-            <p className="font-semibold">New order received!</p>
+            <p className="font-semibold text-sm">New order received!</p>
           </div>
         )}
 
         {/* ── Stats Bar ── */}
-        <div className="grid grid-cols-3 gap-4">
-
-          {/* Active Orders */}
-          <div className="bg-white rounded-2xl shadow-sm p-4 flex items-center gap-4 border-l-4 border-l-orange-400">
-            <div className="bg-orange-100 p-3 rounded-xl">
-              <span className="text-2xl">📋</span>
+        <div className="bg-orange-500 rounded-2xl p-4 text-white">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-orange-100 text-sm">Today's Overview</p>
+            <button
+              onClick={() => fetchOrders()}
+              className="text-orange-200 hover:text-white text-xs font-medium transition"
+            >
+              ↻ Refresh
+            </button>
+          </div>
+          <div className="grid grid-cols-3 gap-3 mt-3">
+            <div className="bg-orange-400 rounded-xl p-3 text-center">
+              <p className="text-2xl font-bold">{activeOrders}</p>
+              <p className="text-orange-100 text-xs mt-1">Active</p>
             </div>
-            <div>
-              <p className="text-3xl font-bold text-gray-800">{activeOrders}</p>
-              <p className="text-sm text-gray-500">Active Orders</p>
+            <div className="bg-orange-400 rounded-xl p-3 text-center">
+              <p className="text-2xl font-bold">{todayOrders}</p>
+              <p className="text-orange-100 text-xs mt-1">Today</p>
+            </div>
+            <div className="bg-orange-400 rounded-xl p-3 text-center">
+              <p className="text-2xl font-bold">{todayRevenue}</p>
+              <p className="text-orange-100 text-xs mt-1">Ksh Today</p>
             </div>
           </div>
-
-          {/* Today's Orders */}
-          <div className="bg-white rounded-2xl shadow-sm p-4 flex items-center gap-4 border-l-4 border-l-blue-400">
-            <div className="bg-blue-100 p-3 rounded-xl">
-              <span className="text-2xl">🛒</span>
-            </div>
-            <div>
-              <p className="text-3xl font-bold text-gray-800">{todayOrders}</p>
-              <p className="text-sm text-gray-500">Today's Orders</p>
-            </div>
-          </div>
-
-          {/* Today's Revenue */}
-          <div className="bg-white rounded-2xl shadow-sm p-4 flex items-center gap-4 border-l-4 border-l-green-400">
-            <div className="bg-green-100 p-3 rounded-xl">
-              <span className="text-2xl">💰</span>
-            </div>
-            <div>
-              <p className="text-3xl font-bold text-gray-800">
-                {todayRevenue}
-              </p>
-              <p className="text-sm text-gray-500">Today's Revenue (Ksh)</p>
-            </div>
-          </div>
-
         </div>
 
         {/* ── Filter Tabs ── */}
-        <div className="bg-white rounded-2xl shadow-sm p-2 flex gap-2">
+        <div className="bg-white rounded-2xl p-1.5 flex gap-1 shadow-sm">
           {FILTERS.map((filter) => (
             <button
               key={filter.key}
               onClick={() => setActiveFilter(filter.key)}
-              className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition ${
+              className={`flex-1 py-2 rounded-xl text-xs font-semibold transition ${
                 activeFilter === filter.key
                   ? 'bg-orange-500 text-white shadow-sm'
                   : 'text-gray-500 hover:bg-gray-100'
@@ -310,7 +270,7 @@ export default function DashboardPage() {
             >
               {filter.label}
               {filter.key === 'ACTIVE' && activeOrders > 0 && (
-                <span className={`ml-2 text-xs px-1.5 py-0.5 rounded-full ${
+                <span className={`ml-1 text-xs px-1 py-0.5 rounded-full ${
                   activeFilter === filter.key
                     ? 'bg-orange-600 text-white'
                     : 'bg-orange-100 text-orange-600'
@@ -324,28 +284,26 @@ export default function DashboardPage() {
 
         {/* Error */}
         {error && (
-          <div className="bg-red-50 text-red-600 px-4 py-3 rounded-xl text-sm">
+          <div className="bg-red-50 text-red-600 px-4 py-3 rounded-2xl text-sm">
             {error}
           </div>
         )}
 
         {/* Empty State */}
         {filteredOrders.length === 0 && !error && (
-          <div className="text-center py-20 bg-white rounded-2xl shadow-sm">
+          <div className="text-center py-16 bg-white rounded-2xl shadow-sm">
             <p className="text-5xl mb-4">📭</p>
-            <p className="text-gray-500 text-lg font-medium">
-              No orders today
-            </p>
+            <p className="text-gray-600 font-semibold">No orders here</p>
             <p className="text-gray-400 text-sm mt-1">
               {activeFilter === 'ALL'
                 ? 'Orders will appear here when students place them'
-                : `No ${activeFilter.toLowerCase()} orders yet`}
+                : `No ${activeFilter.toLowerCase()} orders today`}
             </p>
           </div>
         )}
 
         {/* ── Orders List ── */}
-        <div className="space-y-4">
+        <div className="space-y-3">
           {filteredOrders.map((order) => {
             const nextAction = NEXT_STATUS[order.status]
             const isUpdating = updatingId === order.id
@@ -356,66 +314,53 @@ export default function DashboardPage() {
                 key={order.id}
                 className={`bg-white rounded-2xl shadow-sm border-l-4 ${colors.border} overflow-hidden`}
               >
+                <div className="p-4">
 
-                {/* ── Order Top Section ── */}
-                <div className="p-5">
-                  <div className="flex items-start justify-between">
-
-                    {/* Left — Customer Info */}
+                  {/* Order Header */}
+                  <div className="flex items-start justify-between mb-3">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <p className="font-bold text-gray-800 text-lg">
+                        <p className="font-bold text-gray-800">
                           @{order.user?.nickname || order.user?.email}
                         </p>
-                        <span
-                          className={`text-xs font-semibold px-2.5 py-1 rounded-full ${colors.badge}`}
-                        >
+                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${colors.badge}`}>
                           {STATUS_LABELS[order.status]}
                         </span>
-                        <span className="text-xs text-gray-400">
-                          {timeAgo(order.createdAt)}
-                        </span>
                       </div>
-
-                      {/* Delivery Details */}
-                      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
-                        <p className="text-sm text-gray-600 flex items-center gap-1">
-                          🏠 <span className="font-medium">{order.hostel}</span>
-                        </p>
-                        <p className="text-sm text-gray-600 flex items-center gap-1">
-                          🚪 Room <span className="font-medium">{order.roomNo}</span>
-                        </p>
-                        <p className="text-sm text-gray-600 flex items-center gap-1">
-                          📞 <span className="font-medium">{order.phone}</span>
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Right — Total */}
-                    <div className="text-right ml-4">
-                      <p className="text-2xl font-bold text-orange-500">
-                        Ksh {order.total}
-                      </p>
                       <p className="text-xs text-gray-400 mt-1">
-                        {order.items.length}{' '}
-                        {order.items.length === 1 ? 'item' : 'items'}
+                        {timeAgo(order.createdAt)}
                       </p>
                     </div>
-
+                    <p className="text-xl font-bold text-orange-500 ml-2">
+                      Ksh {order.total}
+                    </p>
                   </div>
 
-                  {/* ── Order Items ── */}
-                  <div className="mt-4 bg-gray-50 rounded-xl p-3 space-y-2">
+                  {/* Delivery Info */}
+                  <div className="flex flex-wrap gap-x-3 gap-y-1 mb-3">
+                    <p className="text-xs text-gray-600">
+                      🏠 <span className="font-medium">{order.hostel}</span>
+                    </p>
+                    <p className="text-xs text-gray-600">
+                      🚪 Room <span className="font-medium">{order.roomNo}</span>
+                    </p>
+                    <p className="text-xs text-gray-600">
+                      📞 <span className="font-medium">{order.phone}</span>
+                    </p>
+                  </div>
+
+                  {/* Order Items */}
+                  <div className="bg-orange-50 rounded-xl p-3 mb-3 space-y-1.5">
                     {order.items.map((item) => (
                       <div
                         key={item.id}
                         className="flex items-center justify-between"
                       >
                         <div className="flex items-center gap-2">
-                          <span className="bg-orange-100 text-orange-600 text-xs font-bold px-2 py-0.5 rounded-lg">
+                          <span className="bg-orange-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-lg">
                             x{item.quantity}
                           </span>
-                          <span className="text-sm font-medium text-gray-700">
+                          <span className="text-sm text-gray-700">
                             {item.product.name}
                           </span>
                         </div>
@@ -426,43 +371,32 @@ export default function DashboardPage() {
                     ))}
                   </div>
 
-                </div>
-
-                {/* Action Button */}
+                  {/* Action Buttons */}
                   {nextAction && (
-                    <div className="px-5 pb-5 flex gap-10">
+                    <div className="flex gap-2">
                       <button
                         onClick={() => updateStatus(order.id, nextAction.next)}
                         disabled={isUpdating}
-                        className="flex-1 bg-orange-500 hover:bg-orange-600 active:bg-orange-700 text-white font-semibold py-3 rounded-xl transition disabled:opacity-50 flex items-center justify-center gap-2"
+                        className="flex-1 bg-orange-500 hover:bg-orange-600 text-white font-semibold py-2.5 rounded-xl transition disabled:opacity-50 text-sm"
                       >
-                        {isUpdating ? (
-                          <>
-                            <span className="animate-spin">⏳</span>
-                            Updating...
-                          </>
-                        ) : (
-                          nextAction.label
-                        )}
+                        {isUpdating ? '⏳ Updating...' : nextAction.label}
                       </button>
-
-                      {/* Cancel Button */}
                       <button
                         onClick={() => {
-                          if (confirm('Are you sure you want to cancel this order?')) {
+                          if (confirm('Cancel this order?')) {
                             updateStatus(order.id, 'CANCELLED')
                           }
                         }}
                         disabled={isUpdating}
-                        className="px-10 py-3 rounded-xl bg-red-50 text-red-500 hover:bg-red-100 font-semibold text-sm transition disabled:opacity-50"
+                        className="px-4 py-2.5 rounded-xl bg-red-50 text-red-500 hover:bg-red-100 font-semibold text-sm transition disabled:opacity-50"
                       >
                         Cancel
                       </button>
                     </div>
                   )}
-                {/* Completed or Cancelled */}
-                {!nextAction && (
-                  <div className="px-5 pb-5">
+
+                  {/* Completed or Cancelled */}
+                  {!nextAction && (
                     <div className="text-center py-2 bg-gray-50 rounded-xl">
                       <span className="text-gray-400 text-sm font-medium">
                         {order.status === 'COMPLETED'
@@ -470,9 +404,9 @@ export default function DashboardPage() {
                           : '❌ Order cancelled'}
                       </span>
                     </div>
-                  </div>
-                )}
+                  )}
 
+                </div>
               </div>
             )
           })}
