@@ -1,5 +1,12 @@
 import { NextResponse } from 'next/server'
+import webpush from 'web-push'
 import { subscriptions } from '../route'
+
+webpush.setVapidDetails(
+  process.env.VAPID_EMAIL,
+  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
+  process.env.VAPID_PRIVATE_KEY
+)
 
 export async function POST(request) {
   try {
@@ -7,18 +14,13 @@ export async function POST(request) {
 
     const payload = JSON.stringify({ title, body, url })
 
-    // Send to all subscribed owners
     const sendPromises = []
     subscriptions.forEach((subString) => {
       const subscription = JSON.parse(subString)
       sendPromises.push(
-        fetch(subscription.endpoint, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: payload,
-        }).catch((err) => console.error('Push send error:', err))
+        webpush.sendNotification(subscription, payload).catch((err) => {
+          console.error('Push send error:', err)
+        })
       )
     })
 
