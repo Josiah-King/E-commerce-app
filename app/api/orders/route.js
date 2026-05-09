@@ -55,6 +55,21 @@ export async function POST(request) {
       },
     })
 
+    // Send push notification to owner
+    try {
+      await fetch(`${process.env.NEXTAUTH_URL}/api/push/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: '🍟 New Order!',
+          body: `New order — Ksh ${total}`,
+          url: '/dashboard',
+        }),
+      })
+    } catch (err) {
+      console.error('Failed to send push notification:', err)
+    }
+
     return NextResponse.json(
       { message: 'Order created successfully', orderId: order.id },
       { status: 201 }

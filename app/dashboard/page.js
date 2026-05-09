@@ -71,6 +71,35 @@ const FILTERS = [
   { key: 'CANCELLED', label: 'Cancelled' },
 ]
 
+function playNotificationSound() {
+  try {
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)()
+
+    // Create a pleasant two tone notification sound
+    const frequencies = [523, 659]
+    frequencies.forEach((freq, index) => {
+      const oscillator = audioContext.createOscillator()
+      const gainNode = audioContext.createGain()
+
+      oscillator.connect(gainNode)
+      gainNode.connect(audioContext.destination)
+
+      oscillator.frequency.value = freq
+      oscillator.type = 'sine'
+
+      const startTime = audioContext.currentTime + index * 0.15
+      gainNode.gain.setValueAtTime(0, startTime)
+      gainNode.gain.linearRampToValueAtTime(0.3, startTime + 0.05)
+      gainNode.gain.linearRampToValueAtTime(0, startTime + 0.3)
+
+      oscillator.start(startTime)
+      oscillator.stop(startTime + 0.3)
+    })
+  } catch (error) {
+    console.log('Audio not supported')
+  }
+}
+
 function timeAgo(date) {
   const seconds = Math.floor((new Date() - new Date(date)) / 1000)
   if (seconds < 60) return 'Just now'
@@ -127,6 +156,7 @@ export default function DashboardPage() {
       }
       if (isAutoRefresh && data.orders.length > prevOrderCount) {
         setNewOrderAlert(true)
+        playNotificationSound()
         setTimeout(() => setNewOrderAlert(false), 5000)
       }
       setPrevOrderCount(data.orders.length)
@@ -176,6 +206,65 @@ export default function DashboardPage() {
       setUpdatingId(null)
     }
   }
+
+  // Register service worker and request push permission
+  useEffect(() => {
+    if (status !== 'authenticated') return
+    if (session?.user?.role !== 'OWNER') return
+
+    async function registerPush() {
+      try {
+        // Register service worker
+        if (!('serviceWorker' in navigator)) return
+        if (!('PushManager' in window)) return
+
+        const registration = await navigator.serviceWorker.register('/sw.js')
+        console.log('Service worker registered')
+
+        // Request notification permission
+        const permission = await Notification.requestPermission()
+        if (permission !== 'granted') {
+          console.log('Notification permission denied')
+          return
+        }
+
+        // Subscribe to push notifications
+        const subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(
+            process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || ''
+          ),
+        })
+
+        // Send subscription to server
+        await fetch('/api/push', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ subscription }),
+        })
+
+        console.log('Push notifications enabled')
+      } catch (error) {
+        console.error('Push registration error:', error)
+      }
+    }
+
+    function urlBase64ToUint8Array(base64String) {
+      if (!base64String) return new Uint8Array()
+      const padding = '='.repeat((4 - (base64String.length % 4)) % 4)
+      const base64 = (base64String + padding)
+        .replace(/-/g, '+')
+        .replace(/_/g, '/')
+      const rawData = window.atob(base64)
+      const outputArray = new Uint8Array(rawData.length)
+      for (let i = 0; i < rawData.length; i++) {
+        outputArray[i] = rawData.charCodeAt(i)
+      }
+      return outputArray
+    }
+
+    registerPush()
+  }, [status, session])
 
   const activeOrders = orders.filter((o) =>
     ACTIVE_STATUSES.includes(o.status)
@@ -233,12 +322,26 @@ export default function DashboardPage() {
         <div className="bg-orange-500 rounded-2xl p-4 text-white">
           <div className="flex items-center justify-between mb-1">
             <p className="text-orange-100 text-sm">Today's Overview</p>
-            <button
-              onClick={() => fetchOrders()}
-              className="text-orange-200 hover:text-white text-xs font-medium transition"
-            >
-              ↻ Refresh
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={async () => {
+                  const permission = await Notification.requestPermission()
+                  if (permission === 'granted') {
+                    alert('🔔 Notifications enabled!')
+                  }
+                }}
+                className="text-orange-200 hover:text-white text-xs font-medium transition"
+                title="Enable notifications"
+              >
+                🔔
+              </button>
+              <button
+                onClick={() => fetchOrders()}
+                className="text-orange-200 hover:text-white text-xs font-medium transition"
+              >
+                ↻ Refresh
+              </button>
+            </div>
           </div>
           <div className="grid grid-cols-3 gap-3 mt-3">
             <div className="bg-orange-400 rounded-xl p-3 text-center">
