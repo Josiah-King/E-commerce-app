@@ -38,7 +38,11 @@ async function sendPushNotification(title, body, url) {
                   auth: sub.auth,
                 },
               },
-              payload
+              payload,
+              {
+                urgency: 'high',
+                TTL: 60,
+              }
             )
             .then(() => console.log('Push sent successfully'))
             .catch((err) => {
