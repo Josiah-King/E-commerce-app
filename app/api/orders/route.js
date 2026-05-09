@@ -14,39 +14,47 @@ webpush.setVapidDetails(
 )
 
 async function sendPushNotification(title, body, url) {
-  try {
-    const subscriptions = await prisma.pushSubscription.findMany()
+  // Run in background — don't await so order creation isn't blocked
+  Promise.resolve().then(async () => {
+    try {
+      const subscriptions = await prisma.pushSubscription.findMany()
+      if (subscriptions.length === 0) {
+        console.log('No subscriptions found in database')
+        return
+      }
 
-    if (subscriptions.length === 0) return
+      console.log(`Sending push to ${subscriptions.length} subscription(s)`)
 
-    const payload = JSON.stringify({ title, body, url })
+      const payload = JSON.stringify({ title, body, url })
 
-    await Promise.all(
-      subscriptions.map((sub) =>
-        webpush
-          .sendNotification(
-            {
-              endpoint: sub.endpoint,
-              keys: {
-                p256dh: sub.p256dh,
-                auth: sub.auth,
+      await Promise.all(
+        subscriptions.map((sub) =>
+          webpush
+            .sendNotification(
+              {
+                endpoint: sub.endpoint,
+                keys: {
+                  p256dh: sub.p256dh,
+                  auth: sub.auth,
+                },
               },
-            },
-            payload
-          )
-          .catch((err) => {
-            console.error('Push error:', err)
-            if (err.statusCode === 410) {
-              return prisma.pushSubscription.delete({
-                where: { endpoint: sub.endpoint },
-              })
-            }
-          })
+              payload
+            )
+            .then(() => console.log('Push sent successfully'))
+            .catch((err) => {
+              console.error('Push send failed:', err.message)
+              if (err.statusCode === 410) {
+                return prisma.pushSubscription.delete({
+                  where: { endpoint: sub.endpoint },
+                })
+              }
+            })
+        )
       )
-    )
-  } catch (err) {
-    console.error('Failed to send push notification:', err)
-  }
+    } catch (err) {
+      console.error('Push notification error:', err.message)
+    }
+  })
 }
 
 export async function POST(request) {
