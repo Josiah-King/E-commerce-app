@@ -1,13 +1,15 @@
 import { NextResponse } from 'next/server'
+import { PrismaClient } from '@prisma/client'
+import { PrismaPg } from '@prisma/adapter-pg'
 import { auth } from '@/auth'
 
-// Store subscriptions in memory for now
-// In production you'd save these to the database
-const subscriptions = new Set()
+const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL })
+const prisma = new PrismaClient({ adapter })
 
 export async function POST(request) {
   try {
     const session = await auth()
+
     if (!session || session.user.role !== 'OWNER') {
       return NextResponse.json(
         { error: 'Not authorized' },
@@ -16,7 +18,19 @@ export async function POST(request) {
     }
 
     const { subscription } = await request.json()
-    subscriptions.add(JSON.stringify(subscription))
+
+    await prisma.pushSubscription.upsert({
+      where: { endpoint: subscription.endpoint },
+      update: {
+        p256dh: subscription.keys.p256dh,
+        auth: subscription.keys.auth,
+      },
+      create: {
+        endpoint: subscription.endpoint,
+        p256dh: subscription.keys.p256dh,
+        auth: subscription.keys.auth,
+      },
+    })
 
     return NextResponse.json({ message: 'Subscribed successfully' })
   } catch (error) {
@@ -27,5 +41,3 @@ export async function POST(request) {
     )
   }
 }
-
-export { subscriptions }
