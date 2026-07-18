@@ -57,6 +57,7 @@ model Order {
   hostel    String
   roomNo    String
   mpesaRef  String?
+  checkoutRequestId String?     @unique
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
   items     OrderItem[]

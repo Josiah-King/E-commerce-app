@@ -104,7 +104,7 @@ export default function CheckoutPage() {
     setLoading(true)
 
     try {
-      // Send order to backend
+      // Step 1: Create the order
       const response = await fetch('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -129,10 +129,29 @@ export default function CheckoutPage() {
         return
       }
 
+      // Step 2: Trigger the M-Pesa STK Push
+      const mpesaResponse = await fetch('/api/mpesa/stkpush', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phoneNumber: formattedPhone,
+          amount: totalPrice,
+          orderId: data.orderId,
+        }),
+      })
+
+      const mpesaData = await mpesaResponse.json()
+
+      if (!mpesaResponse.ok) {
+        setError('Order created but payment prompt failed. Please try again from your orders page.')
+        setLoading(false)
+        return
+      }
+
       // Clear cart from sessionStorage
       sessionStorage.removeItem('cart')
 
-      // Redirect to order tracking page
+      // Redirect to order tracking page — student enters PIN on their phone
       router.push(`/orders/${data.orderId}`)
 
     } catch (error) {
