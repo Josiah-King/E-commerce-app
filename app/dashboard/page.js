@@ -387,21 +387,22 @@ export default function DashboardPage() {
 
       <main className="max-w-2xl mx-auto px-4 py-5 space-y-4">
 
+        
         {/* ── Shop Open/Closed Switch ── */}
         {!shopLoading && (
           <div
-            className={`rounded-2xl p-4 shadow-sm transition ${
-              shopOpen ? 'bg-white border border-green-200' : 'bg-white border border-red-200'
+            className={`rounded-2xl p-4 shadow-sm border ${
+              shopOpen ? 'bg-white border-green-200' : 'bg-white border-red-200'
             }`}
           >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="text-xl">{shopOpen ? '🟢' : '🔴'}</span>
-                <div>
-                  <p className="font-semibold text-gray-800 text-sm">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-xl shrink-0">{shopOpen ? '🟢' : '🔴'}</span>
+                <div className="min-w-0">
+                  <p className="font-semibold text-gray-800 text-sm truncate">
                     Shop is {shopOpen ? 'Open' : 'Closed'}
                   </p>
-                  <p className="text-xs text-gray-400">
+                  <p className="text-xs text-gray-400 truncate">
                     {shopOpen
                       ? 'Students can order now'
                       : 'Students cannot place orders'}
@@ -411,21 +412,17 @@ export default function DashboardPage() {
 
               {/* Toggle Switch */}
               <button
+                type="button"
                 onClick={toggleShop}
                 disabled={shopSaving}
-                className={`relative w-14 h-7 rounded-full transition-colors disabled:opacity-50 shrink-0 ${
-                  shopOpen ? 'bg-green-500' : 'bg-gray-300'
+                className={`shrink-0 inline-flex items-center w-12 h-6 rounded-full p-0.5 transition-colors disabled:opacity-50 ${
+                  shopOpen ? 'bg-green-500 justify-end' : 'bg-gray-300 justify-start'
                 }`}
               >
-                <span
-                  className={`absolute top-1 w-5 h-5 bg-white rounded-full shadow transition-transform ${
-                    shopOpen ? 'translate-x-7' : 'translate-x-1'
-                  }`}
-                />
+                <span className="w-5 h-5 bg-white rounded-full shadow" />
               </button>
             </div>
 
-            {/* Closed Message Box — only shown when closed */}
             {!shopOpen && (
               <div className="mt-3 pt-3 border-t border-gray-100">
                 <label className="text-xs font-medium text-gray-500 mb-1 block">
