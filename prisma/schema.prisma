@@ -91,3 +91,10 @@ model PushSubscription {
   auth      String
   createdAt DateTime @default(now())
 }
+
+model ShopSettings {
+  id            String   @id @default("main")
+  isOpen        Boolean  @default(true)
+  closedMessage String?
+  updatedAt     DateTime @updatedAt
+}
