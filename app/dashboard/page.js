@@ -413,7 +413,7 @@ export default function DashboardPage() {
               <button
                 onClick={toggleShop}
                 disabled={shopSaving}
-                className={`relative w-14 h-7 rounded-full transition-colors disabled:opacity-50 ${
+                className={`relative w-14 h-7 rounded-full transition-colors disabled:opacity-50 shrink-0 ${
                   shopOpen ? 'bg-green-500' : 'bg-gray-300'
                 }`}
               >
