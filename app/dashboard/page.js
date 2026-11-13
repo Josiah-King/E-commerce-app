@@ -419,7 +419,7 @@ export default function DashboardPage() {
               >
                 <span
                   className={`absolute top-1 w-5 h-5 bg-white rounded-full shadow transition-transform ${
-                    shopOpen ? 'translate-x-8' : 'translate-x-1'
+                    shopOpen ? 'translate-x-7' : 'translate-x-1'
                   }`}
                 />
               </button>
