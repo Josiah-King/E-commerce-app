@@ -234,7 +234,7 @@ export default function TrackOrderPage() {
               ❌ This order has been cancelled
             </p>
             <p className="text-red-400 text-xs mt-1">
-              Please place a new order if you still want food
+              Please place a new order
             </p>
           </div>
         )}

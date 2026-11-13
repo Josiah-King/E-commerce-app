@@ -135,6 +135,10 @@ export default function DashboardPage() {
   const [activeFilter, setActiveFilter] = useState('ACTIVE')
   const [newOrderAlert, setNewOrderAlert] = useState(false)
   const [prevOrderCount, setPrevOrderCount] = useState(0)
+  const [shopOpen, setShopOpen] = useState(true)
+  const [closedMessage, setClosedMessage] = useState('')
+  const [shopLoading, setShopLoading] = useState(true)
+  const [shopSaving, setShopSaving] = useState(false)
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -174,6 +178,29 @@ export default function DashboardPage() {
     fetchOrders()
   }, [status, session])
 
+  // Fetch the shop's open/closed state
+  useEffect(() => {
+    if (status !== 'authenticated') return
+    if (session?.user?.role !== 'OWNER') return
+
+    async function fetchShopStatus() {
+      try {
+        const response = await fetch('/api/shop')
+        const data = await response.json()
+        if (response.ok) {
+          setShopOpen(data.isOpen)
+          setClosedMessage(data.closedMessage || '')
+        }
+      } catch (error) {
+        console.error('Failed to load shop status:', error)
+      } finally {
+        setShopLoading(false)
+      }
+    }
+
+    fetchShopStatus()
+  }, [status, session])
+
   useEffect(() => {
     if (status !== 'authenticated') return
     if (session?.user?.role !== 'OWNER') return
@@ -204,6 +231,56 @@ export default function DashboardPage() {
       alert('Failed to update status. Please try again.')
     } finally {
       setUpdatingId(null)
+    }
+  }
+
+  async function toggleShop() {
+    const newIsOpen = !shopOpen
+    setShopSaving(true)
+
+    try {
+      const response = await fetch('/api/shop', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          isOpen: newIsOpen,
+          closedMessage: newIsOpen ? null : closedMessage,
+        }),
+      })
+
+      if (!response.ok) {
+        alert('Failed to update shop status. Please try again.')
+        return
+      }
+
+      const data = await response.json()
+      setShopOpen(data.isOpen)
+      setClosedMessage(data.closedMessage || '')
+    } catch (error) {
+      alert('Failed to update shop status. Please try again.')
+    } finally {
+      setShopSaving(false)
+    }
+  }
+
+  async function saveClosedMessage() {
+    setShopSaving(true)
+    try {
+      const response = await fetch('/api/shop', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          isOpen: false,
+          closedMessage,
+        }),
+      })
+      if (!response.ok) {
+        alert('Failed to save message. Please try again.')
+      }
+    } catch (error) {
+      alert('Failed to save message. Please try again.')
+    } finally {
+      setShopSaving(false)
     }
   }
 
@@ -309,6 +386,65 @@ export default function DashboardPage() {
       <OwnerNav />
 
       <main className="max-w-2xl mx-auto px-4 py-5 space-y-4">
+
+        {/* ── Shop Open/Closed Switch ── */}
+        {!shopLoading && (
+          <div
+            className={`rounded-2xl p-4 shadow-sm transition ${
+              shopOpen ? 'bg-white border border-green-200' : 'bg-white border border-red-200'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">{shopOpen ? '🟢' : '🔴'}</span>
+                <div>
+                  <p className="font-semibold text-gray-800 text-sm">
+                    Shop is {shopOpen ? 'Open' : 'Closed'}
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    {shopOpen
+                      ? 'Students can order now'
+                      : 'Students cannot place orders'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Toggle Switch */}
+              <button
+                onClick={toggleShop}
+                disabled={shopSaving}
+                className={`relative w-14 h-7 rounded-full transition-colors disabled:opacity-50 ${
+                  shopOpen ? 'bg-green-500' : 'bg-gray-300'
+                }`}
+              >
+                <span
+                  className={`absolute top-1 w-5 h-5 bg-white rounded-full shadow transition-transform ${
+                    shopOpen ? 'translate-x-8' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+
+            {/* Closed Message Box — only shown when closed */}
+            {!shopOpen && (
+              <div className="mt-3 pt-3 border-t border-gray-100">
+                <label className="text-xs font-medium text-gray-500 mb-1 block">
+                  Message shown to students
+                </label>
+                <input
+                  type="text"
+                  value={closedMessage}
+                  onChange={(e) => setClosedMessage(e.target.value)}
+                  onBlur={saveClosedMessage}
+                  placeholder="e.g. Back at 6pm"
+                  maxLength={120}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-200"
+                />
+              </div>
+            )}
+          </div>
+        )}
+
 
         {/* ── New Order Alert ── */}
         {newOrderAlert && (
