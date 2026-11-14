@@ -26,6 +26,8 @@ export default function MenuPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [activeOrder, setActiveOrder] = useState(null)
+  const [shopOpen, setShopOpen] = useState(true)
+  const [closedMessage, setClosedMessage] = useState('')
 
   // Redirect to login if not logged in
   useEffect(() => {
@@ -75,6 +77,26 @@ export default function MenuPage() {
     }
 
     checkActiveOrder()
+  }, [status])
+
+  // Check if the shop is currently open
+  useEffect(() => {
+    if (status !== 'authenticated') return
+
+    async function fetchShopStatus() {
+      try {
+        const response = await fetch('/api/shop')
+        const data = await response.json()
+        if (response.ok) {
+          setShopOpen(data.isOpen)
+          setClosedMessage(data.closedMessage || '')
+        }
+      } catch (error) {
+        console.error('Failed to load shop status:', error)
+      }
+    }
+
+    fetchShopStatus()
   }, [status])
 
   function addToCart(product) {
@@ -203,6 +225,18 @@ export default function MenuPage() {
 
       <div className="max-w-2xl mx-auto px-4">
 
+        {/* ── Shop Closed Banner ── */}
+        {!shopOpen && (
+          <div className="mt-4 bg-red-50 border border-red-100 rounded-2xl px-4 py-3">
+            <p className="text-red-600 font-semibold text-sm">
+              🔴 We're currently closed
+            </p>
+            <p className="text-red-400 text-xs mt-1">
+              {closedMessage || 'Check back soon'}
+            </p>
+          </div>
+        )}
+
         {/* ── Active Order Banner ── */}
         {activeOrder && (
           <div
@@ -298,37 +332,37 @@ export default function MenuPage() {
                       Ksh {product.price}
                     </p>
 
-                    {/* Add to Cart */}
-                    {!isOutOfStock && (
-                      <>
-                        {cartItem ? (
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => removeFromCart(product.id)}
-                              className="w-7 h-7 rounded-full bg-orange-100 text-orange-600 font-bold flex items-center justify-center hover:bg-orange-200 transition text-base"
-                            >
-                              −
-                            </button>
-                            <span className="font-bold text-gray-800 text-sm w-4 text-center">
-                              {cartItem.quantity}
-                            </span>
-                            <button
-                              onClick={() => addToCart(product)}
-                              className="w-7 h-7 rounded-full bg-orange-500 text-white font-bold flex items-center justify-center hover:bg-orange-600 transition text-base"
-                            >
-                              +
-                            </button>
-                          </div>
-                        ) : (
+                  {/* Add to Cart */}
+                  {!isOutOfStock && shopOpen && (
+                    <>
+                      {cartItem ? (
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => removeFromCart(product.id)}
+                            className="w-7 h-7 rounded-full bg-orange-100 text-orange-600 font-bold flex items-center justify-center hover:bg-orange-200 transition text-base"
+                          >
+                            −
+                          </button>
+                          <span className="font-bold text-gray-800 text-sm w-4 text-center">
+                            {cartItem.quantity}
+                          </span>
                           <button
                             onClick={() => addToCart(product)}
-                            className="bg-orange-500 hover:bg-orange-600 text-white text-xs font-semibold px-3 py-1.5 rounded-full transition"
+                            className="w-7 h-7 rounded-full bg-orange-500 text-white font-bold flex items-center justify-center hover:bg-orange-600 transition text-base"
                           >
-                            Add
+                            +
                           </button>
-                        )}
-                      </>
-                    )}
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => addToCart(product)}
+                          className="bg-orange-500 hover:bg-orange-600 text-white text-xs font-semibold px-3 py-1.5 rounded-full transition"
+                        >
+                          Add
+                        </button>
+                      )}
+                    </>
+                  )}
                   </div>
                 </div>
               </div>
@@ -339,7 +373,7 @@ export default function MenuPage() {
       </div>
 
       {/* ── Floating Cart Button ── */}
-      {totalItems > 0 && (
+      {totalItems > 0 && shopOpen && (
         <div className="fixed bottom-6 left-0 right-0 px-4 z-50">
           <div className="max-w-2xl mx-auto">
             <button

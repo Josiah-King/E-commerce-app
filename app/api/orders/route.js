@@ -72,6 +72,22 @@ export async function POST(request) {
       )
     }
 
+    // Block new orders while the shop is closed
+    const shopSettings = await prisma.shopSettings.findUnique({
+      where: { id: 'main' },
+    })
+
+    if (shopSettings && !shopSettings.isOpen) {
+      return NextResponse.json(
+        {
+          error: shopSettings.closedMessage
+            ? `We're currently closed — ${shopSettings.closedMessage}`
+            : "We're currently closed. Please check back soon.",
+        },
+        { status: 403 }
+      )
+    }
+
     const { items, total, phone, hostel, roomNo } = await request.json()
 
     if (!items || items.length === 0) {

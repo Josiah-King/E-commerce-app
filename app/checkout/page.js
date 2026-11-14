@@ -19,6 +19,7 @@ export default function CheckoutPage() {
   // Form state
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [shopOpen, setShopOpen] = useState(true)
 
   // Redirect to login if not logged in
   useEffect(() => {
@@ -54,6 +55,30 @@ export default function CheckoutPage() {
     setRoomNo(session?.user?.roomNo || '')
 
   }, [status, session, router])
+
+  // Check shop status — block checkout if closed
+  useEffect(() => {
+    if (status !== 'authenticated') return
+
+    async function checkShopStatus() {
+      try {
+        const response = await fetch('/api/shop')
+        const data = await response.json()
+        if (response.ok && !data.isOpen) {
+          setShopOpen(false)
+          setError(
+            data.closedMessage
+              ? `We're currently closed — ${data.closedMessage}`
+              : "We're currently closed. Please check back soon."
+          )
+        }
+      } catch (error) {
+        console.error('Failed to check shop status:', error)
+      }
+    }
+
+    checkShopStatus()
+  }, [status])
 
   // Calculate total price
   const totalPrice = cartItems.reduce(
@@ -297,10 +322,12 @@ export default function CheckoutPage() {
         {/* ── Place Order Button ── */}
         <button
           onClick={handlePlaceOrder}
-          disabled={loading}
+          disabled={loading || !shopOpen}
           className="w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold py-4 rounded-2xl shadow-lg transition disabled:opacity-50 mb-8"
         >
-          {loading
+          {!shopOpen
+            ? "We're currently closed"
+            : loading
             ? 'Placing order...'
             : `Pay Ksh ${totalPrice} via M-Pesa`}
         </button>
