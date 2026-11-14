@@ -354,6 +354,13 @@ export default function DashboardPage() {
     .reduce((sum, o) => sum + o.total, 0)
 
   const filteredOrders = orders.filter((order) => {
+    // Active orders show regardless of date — they're still pending action.
+    // Completed/Cancelled/All stay restricted to today, since older ones
+    // belong in Analytics > Order history.
+    if (activeFilter === 'ACTIVE') {
+      return ACTIVE_STATUSES.includes(order.status)
+    }
+
     const orderDate = new Date(order.createdAt)
     const today = new Date()
     const isTodayOrder =
@@ -361,8 +368,8 @@ export default function DashboardPage() {
       orderDate.getMonth() === today.getMonth() &&
       orderDate.getFullYear() === today.getFullYear()
     if (!isTodayOrder) return false
+
     if (activeFilter === 'ALL') return true
-    if (activeFilter === 'ACTIVE') return ACTIVE_STATUSES.includes(order.status)
     if (activeFilter === 'COMPLETED') return order.status === 'COMPLETED'
     if (activeFilter === 'CANCELLED') return order.status === 'CANCELLED'
     return true
